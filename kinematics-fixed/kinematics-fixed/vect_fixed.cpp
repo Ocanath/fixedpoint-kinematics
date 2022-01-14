@@ -176,12 +176,8 @@ int64_t sqrt_i64(int64_t v)
 	return q;
 }
 
-/*
-* Expensive. 64 bit buffered fixed point dot product and 
-* inverse square root. Tested, works. No guarding
-* for overflow, so be careful...
-*/
-void normalize_vect64(vect3_32b_t* vin, int vin_radix)
+
+int64_t vect32_mag64(vect3_32b_t* vin, int vin_radix)
 {
 	int64_t varr[3];	//64bit representation of vin
 	int64_t v_dot_v = 0;
@@ -191,11 +187,36 @@ void normalize_vect64(vect3_32b_t* vin, int vin_radix)
 		v_dot_v += (varr[i] * varr[i]) >> vin_radix;
 	}
 	//vdotv is guaranteed positive.
-	int64_t sq = sqrt_i64(v_dot_v << vin_radix);	//left shift by the radix because sqrt(V*2^32) = 2^16*sqrt(v). Pre-left shifting preserves the radix of the input without loss of resolution
+	return  sqrt_i64(v_dot_v << vin_radix);	//left shift by the radix because sqrt(V*2^32) = 2^16*sqrt(v). Pre-left shifting preserves the radix of the input without loss of resolution
+}
 
+/*
+* Expensive. 64 bit buffered fixed point dot product and 
+* inverse square root. Tested, works. No guarding
+* for overflow, so be careful...
+* 
+* 
+* Note. Repeating the functionality of vect32_mag64 here wihtout
+* an actual function call because both sections require the use of
+* a 64bit buffered copy of vin. This is a slight optimization
+* at the expense of clutter/code re-use
+*/
+void normalize_vect64(vect3_32b_t* vin, int vin_radix)
+{
+	//obtain the magnitude
+	int64_t varr[3];	//64bit representation of vin
+	int64_t v_dot_v = 0;	//note: vdotv is guaranteed positive.
+	for (int i = 0; i < 3; i++)
+	{
+		varr[i] = (int64_t)vin->v[i];
+		v_dot_v += (varr[i] * varr[i]) >> vin_radix;	
+	}
+	int64_t mag = sqrt_i64(v_dot_v << vin_radix);	//left shift by the radix because sqrt(V*2^32) = 2^16*sqrt(v). Pre-left shifting preserves the radix of the input without loss of resolution
+
+	//scale the input vector
 	int64_t one = ((int64_t)1 << vin_radix);	//t y p e s
 	for(int i = 0; i < 3; i++)
-		vin->v[i] = (int32_t)((varr[i] * one) / sq);	//apply 1/sq. Multiply by radix to preserve sign, and premultiply to prevent truncation of lower bits.
+		vin->v[i] = (int32_t)((varr[i] * one) / mag);	//apply 1/sq. Multiply by radix to preserve sign, and premultiply to prevent truncation of lower bits.
 }
 
 /*Generic 64bit buffer dot product calculator for vectors of arbitrary size*/

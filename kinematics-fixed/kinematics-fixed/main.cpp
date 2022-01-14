@@ -143,6 +143,7 @@ int main(void)
 
 	int solved = 0;
 	print_vect_mm("TARG", &otarg, j->n_t);
+	int cycles = 0;
 	while (solved == 0)
 	{
 		//do forward kinematics
@@ -195,6 +196,8 @@ int main(void)
 		int32_t one = 1 << j->n_r;
 		vect3_32b_t z = { 0, 0, one};
 
+
+		solved = 1;
 		for (int i = 0; i < 3; i++)
 		{
 			vect3_32b_t vq = { j[i].cos_q, j[i].sin_q, 0 };
@@ -203,11 +206,14 @@ int main(void)
 			cross64_pbr(&z, &vq, &tangent, j->n_r);
 			vect3_32b_t vq_new;
 
-			int64_t tau_i_64 = (int64_t)tau[i] / 1000;
+			int64_t tau_i_64 = (int64_t)tau[i] / 150;
 			for (int r = 0; r < 3; r++)
 			{
 				int64_t tmp = (((int64_t)tangent.v[r]) * tau_i_64) >> tau_radix;
 				vq_new.v[r] = (int32_t)tmp + vq.v[r];
+
+				if (tmp != 0)
+					solved = 0;
 			}
 			
 			normalize_vect64(&vq_new, j->n_si);
@@ -215,9 +221,10 @@ int main(void)
 			j[i].cos_q = vq_new.v[0];
 			j[i].sin_q = vq_new.v[1];
 		}
-
+		cycles++;
 	}
-	
+	//for (int i = 0; i < 3; i++)
+	//	j[i].q = atan2_fixed(j[i].sin_q, j[i].cos_q);
 
 	float div = (float)(1 << KINEMATICS_TRANSLATION_ORDER);
 	float res[3];
@@ -225,6 +232,7 @@ int main(void)
 		res[i] = (float)(otarg.v[i] - o_anchor_b.v[i])/div;
 	
 	printf("Final Error: [%f,%f,%f]\r\n", res[0], res[1], res[2]);
-	div = 71.4887f;
-	printf("Q: [%f,%f,%f]\r\n", (float)j[0].q / div, (float)j[1].q / div, (float)j[2].q / div);
+	printf("Computed in %d cycles\r\n", cycles);
+	//div = 71.4887f;
+	//printf("Q: [%f,%f,%f]\r\n", (float)j[0].q / div, (float)j[1].q / div, (float)j[2].q / div);
 }
