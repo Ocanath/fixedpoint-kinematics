@@ -55,6 +55,8 @@ void ht32_mult_pbr(mat4_32b_t* m1, mat4_32b_t* m2, mat4_32b_t* ret)
 */
 void ht32_mult64_pbr(mat4_32b_t* m1, mat4_32b_t* m2, mat4_32b_t* ret, int n)
 {
+	//if(n > 29)
+	//	return
 	int r, c, i;
 	int64_t tmp;
 	/*Do the rotation matrix part FIRST*/
@@ -67,10 +69,23 @@ void ht32_mult64_pbr(mat4_32b_t* m1, mat4_32b_t* m2, mat4_32b_t* ret, int n)
 			{
 				tmp += (((int64_t)m1->m[r][i]) * ((int64_t)m2->m[i][c]));
 			}
-			ret->m[r][c] = (int32_t)(tmp >> n);	//each term has 12bit binary decimal point. Remove the additional terms accumulated AFTER the sum.
-			//the 3x3 portion is safe to do multiple accumulations because each term is 12bit limited (even ignoring constraints imposed by the
-			//conditions required to be a homogeneous transformation matrix, such as column vector orthogonality, unit vector across row and column vectors)
+			ret->m[r][c] = (int32_t)(tmp >> n);	//shifting after is ok ONLY if the rotation order is less than 29 bits
 		}
+	}
+}
+
+/**/
+void  h32_v32_mult(mat4_32b_t* m, vect3_32b_t* vin, vect3_32b_t* vout, int rshift)
+{
+	for (int r = 0; r < 3; r++)
+	{
+		int64_t tmp = 0;
+		for (int c = 0; c < 3; c++)
+		{
+			tmp += ( ((int64_t)m->m[r][c]) * ((int64_t)vin->v[c]) );
+		}
+		tmp += m->m[r][3];
+		vout->v[r] = (int32_t)(tmp >> rshift);
 	}
 }
 
@@ -88,7 +103,7 @@ void cross32_pbr(vect3_32b_t* v_a, vect3_32b_t* v_b, vect3_32b_t* ret, int n)
 	Same as cross32, except that a 64bit buffer is used, allowing full scale
 	resolution for input vectors.
 */
-void cross64_pbr(vect3_32b_t* v_a, vect3_32b_t* v_b, vect3_32b_t* ret, int n)
+void cross64_pbr(vect3_32b_t* v_a, vect3_32b_t* v_b, vect3_32b_t* ret, int rshift)
 {
 	//ret->v[0] = (-v_a->v[2] * v_b->v[1] + v_a->v[1] * v_b->v[2]) >> n;
 	//ret->v[1] = (v_a->v[2] * v_b->v[0] - v_a->v[0] * v_b->v[2]) >> n;
@@ -101,16 +116,36 @@ void cross64_pbr(vect3_32b_t* v_a, vect3_32b_t* v_b, vect3_32b_t* ret, int n)
 	int64_t vb1 = (int64_t)v_b->v[1];
 	int64_t vb2 = (int64_t)v_b->v[2];
 
-	ret->v[0] = (int32_t)((-va2 * vb1 + va1 * vb2) >> n);
-	ret->v[1] = (int32_t)((va2 * vb0 - va0 * vb2) >> n);
-	ret->v[2] = (int32_t)((-va1 * vb0 + va0 * vb1) >> n);
+	ret->v[0] = (int32_t)((-va2 * vb1 + va1 * vb2) >> rshift);
+	ret->v[1] = (int32_t)((va2 * vb0 - va0 * vb2) >> rshift);
+	ret->v[2] = (int32_t)((-va1 * vb0 + va0 * vb1) >> rshift);
 }
 
+/*Generic 64bit buffer dot product calculator for vectors of arbitrary size*/
+int32_t dot64_pbr(int32_t* va, int32_t* vb, int size, int rshift)
+{
+	int64_t tmp = 0;
+	for (int i = 0; i < size; i++)
+	{
+		int64_t va64 = (int64_t)va[i];
+		int64_t vb64 = (int64_t)vb[i];
+		tmp += ((va64 * vb64) >> rshift);	//could wait until the end to rshift, but there could be overflow if the sum of the multiples exceeds 64 bits
+	}
+	return (int32_t)tmp;
+}
 
 void h32_origin_pbr(vect3_32b_t * v, mat4_32b_t* m)
 {
 	for (int r = 2; r >= 0; r--)
 		v->v[r] = m->m[r][3];
+}
+
+vect3_32b_t h32_origin(mat4_32b_t* m)
+{
+	vect3_32b_t ret;
+	for (int r = 0; r < 3; r++)
+		ret.v[r] = m->m[r][3];
+	return ret;
 }
 
 /*Loads rotation about coordinate. 0 = identity*/

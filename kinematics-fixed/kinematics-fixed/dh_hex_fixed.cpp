@@ -11,7 +11,9 @@ static const mat4_32b_t hb_0 = {
 		{0, 0, 0, ONE_ROT}
 	}
 };
-
+/*Optional: compute these with urdf-style rotations and translations
+* or DH entries. These were pre-computed in matlab for this example.
+*/
 static const mat4_32b_t links_def[NUM_LEGS + 1] = {
 	{
 		{    //link 1
@@ -58,7 +60,7 @@ void setup_dynamic_hex(dynamic_hex_t* robot)
 		//Initialize the labelled orders of rotations, translations, and jacobian
 		j->n_r = KINEMATICS_SIN_ORDER;
 		j->n_t = KINEMATICS_TRANSLATION_ORDER;
-		j->n_si = KINEMATICS_TRANSLATION_ORDER;
+		j->n_si = KINEMATICS_SIN_ORDER;
 		
 		j->q = 0;
 		j->sin_q = sin_lookup(j->q, KINEMATICS_SIN_ORDER);
