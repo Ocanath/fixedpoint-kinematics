@@ -62,9 +62,11 @@ void create_workspace_file(void)
 	fp_position.close();
 }
 
+#define PI_12B_BY_180	71.488686f
+
 int32_t fdeg_to_12b(float f)
 {
-	return (int32_t)(f * 71.488686f);	//4096 * pi / 180 = 71.488686
+	return (int32_t)(f * PI_12B_BY_180);	//4096 * pi / 180 = 71.488686
 }
 
 static const float o_footip_3_f[3] = { -15.31409f, -9.55025f, 0.f };
@@ -127,29 +129,30 @@ int main(void)
 		h32_origin_pbr(&o_anchor_b, &j[2].hb_i);
 		calc_J_32b_point(m, j, &o_anchor_b);
 
+		//show progress
+		//printf("anchor pos: [%d,%d,%d]\r\n", o_anchor_b.v[0], o_anchor_b.v[1], o_anchor_b.v[2]);
+		//print_vect_mm("anchor", &o_anchor_b, j->n_t);
+		printf("q: [%f, %f, %f]\r\n", (float)j[0].q / PI_12B_BY_180, (float)j[1].q / PI_12B_BY_180, (float)j[2].q / PI_12B_BY_180);
+
 		//get vector pointing from the anchor point on the robot to the target. call it 'f'
 		vect3_32b_t f;
 		for (int i = 0; i < 3; i++)
-			f.v[i] = (otarg.v[i] - o_anchor_b.v[i]);
+			f.v[i] = (otarg.v[i] - o_anchor_b.v[i])/500;
 
 		//get the static torque produced by the force vector. Radix should be same as established in 'f' if j->si
-		calc_j_taulist(j, &f, tau, j->n_si);	//removing an n_t (from f) means tau has radix n_si
+		calc_j_taulist(j, &f, tau, j->n_si);	//removing an n_si (from f) yields tau in radix 16
 
 		//gradient descent step: increment q to move the anchor in the direction of the target
 		solved = 1;
 		for (int i = 0; i < 3; i++)
 		{
-			int32_t step = tau[i] / 850000;
+			int32_t step = tau[i] / 4000;
 			j[i].q += step;
 
 			if (step != 0)
 				solved = 0;	//add solved logic. zero tau means we've stabilized and no changes will occur
 		}
 		load_qsin(j);
-
-		//show progress
-		//printf("anchor pos: [%d,%d,%d]\r\n", o_anchor_b.v[0], o_anchor_b.v[1], o_anchor_b.v[2]);
-		print_vect_mm("anchor", &o_anchor_b, j->n_t);
 	}
 	
 	float div = (float)(1 << KINEMATICS_TRANSLATION_ORDER);

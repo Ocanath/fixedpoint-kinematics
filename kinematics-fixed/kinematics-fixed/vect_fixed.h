@@ -36,5 +36,6 @@ void cross64_pbr(vect3_32b_t* v_a, vect3_32b_t* v_b, vect3_32b_t* ret, int n);
 void ht32_mult64_pbr(mat4_32b_t* m1, mat4_32b_t* m2, mat4_32b_t* ret, int n);
 int32_t dot64_pbr(int32_t* va, int32_t* vb, int size, int rshift);
 vect3_32b_t h32_origin(mat4_32b_t* m);
+void  h32_v32_mult(mat4_32b_t* m, vect3_32b_t* vin, vect3_32b_t* vout, int rshift);
 
 #endif // !VECT_FIXED_H

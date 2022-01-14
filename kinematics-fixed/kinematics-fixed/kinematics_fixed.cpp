@@ -202,7 +202,7 @@ void calc_j_taulist(joint32_t* chain_start, vect3_32b_t* f, int32_t * taulist, i
 {
 	int i = 0;
 	joint32_t* j = chain_start;
-	while (j->child != NULL)
+	while (j != NULL)
 	{
 		taulist[i] = dot64_pbr(&(j->Si.v[3]), f->v, 3, rshift);	//remove Si radix to restore original 'f' radix
 
