@@ -3,6 +3,13 @@
  *
  *  Created on: Nov 21, 2021
  *      Author: Ocanath Robotman
+ * 
+ * 
+ * 
+*	Square Root methods taken DIRECTLY FROM: 
+*	https://github.com/chmike/fpsqrt/blob/master/fpsqrt.c
+*	Credit for square root algorithms goes to Christophe Meessen
+* 
  */
 #include "vect_fixed.h"
 
@@ -119,6 +126,76 @@ void cross64_pbr(vect3_32b_t* v_a, vect3_32b_t* v_b, vect3_32b_t* ret, int rshif
 	ret->v[0] = (int32_t)((-va2 * vb1 + va1 * vb2) >> rshift);
 	ret->v[1] = (int32_t)((va2 * vb0 - va0 * vb2) >> rshift);
 	ret->v[2] = (int32_t)((-va1 * vb0 + va0 * vb1) >> rshift);
+}
+
+int32_t vect64_mag(vect3_32b_t* v)
+{
+	return 0;
+}
+
+
+// sqrt_i32 computes the squrare root of a 32bit integer and returns
+// a 32bit integer value. It requires that v is positive.
+int32_t sqrt_i32(int32_t v) 
+{
+	uint32_t b = 1 << 30, q = 0, r = v;
+	while (b > r)
+		b >>= 2;
+	while (b > 0) 
+	{
+		uint32_t t = q + b;
+		q >>= 1;
+		if (r >= t) 
+		{
+			r -= t;
+			q += b;
+		}
+		b >>= 2;
+	}
+	return q;
+}
+
+// sqrt_i64 computes the squrare root of a 64bit integer and returns
+// a 64bit integer value. It requires that v is positive.
+int64_t sqrt_i64(int64_t v) 
+{
+	uint64_t b = ((uint64_t)1) << 62, q = 0, r = v;
+	while (b > r)
+		b >>= 2;
+	while (b > 0) 
+	{
+		uint64_t t = q + b;
+		q >>= 1;
+		if (r >= t)
+		{
+			r -= t;
+			q += b;
+		}
+		b >>= 2;
+	}
+	return q;
+}
+
+/*
+* Expensive. 64 bit buffered fixed point dot product and 
+* inverse square root. Tested, works. No guarding
+* for overflow, so be careful...
+*/
+void normalize_vect64(vect3_32b_t* vin, int vin_radix)
+{
+	int64_t varr[3];	//64bit representation of vin
+	int64_t v_dot_v = 0;
+	for (int i = 0; i < 3; i++)
+	{
+		varr[i] = (int64_t)vin->v[i];
+		v_dot_v += (varr[i] * varr[i]) >> vin_radix;
+	}
+	//vdotv is guaranteed positive.
+	int64_t sq = sqrt_i64(v_dot_v << vin_radix);	//left shift by the radix because sqrt(V*2^32) = 2^16*sqrt(v). Pre-left shifting preserves the radix of the input without loss of resolution
+
+	int64_t one = ((int64_t)1 << vin_radix);	//t y p e s
+	for(int i = 0; i < 3; i++)
+		vin->v[i] = (int32_t)((varr[i] * one) / sq);	//apply 1/sq. Multiply by radix to preserve sign, and premultiply to prevent truncation of lower bits.
 }
 
 /*Generic 64bit buffer dot product calculator for vectors of arbitrary size*/

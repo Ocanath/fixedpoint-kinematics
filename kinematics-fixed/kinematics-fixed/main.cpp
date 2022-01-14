@@ -82,6 +82,23 @@ void print_vect_mm(const char* prefix, vect3_32b_t* v, int radix)
 
 int main(void)
 {
+	{
+		int64_t v = 84 * (1 << KINEMATICS_TRANSLATION_ORDER);
+		int64_t vnew = sqrt_i64(v);
+		printf("in: %d, out: %d\r\n", (int32_t)v, (int32_t)vnew);
+	}
+	{
+		float f[3] = { 4.7, 9.21, -11.15 };
+		vect3_32b_t in;
+		int n = KINEMATICS_SIN_ORDER;
+		float scf = (float)(1 << n);
+		for (int i = 0; i < 3; i++)
+			in.v[i] = (int32_t)(f[i] * scf);
+		print_vect_mm("input: ", &in, n);
+		normalize_vect64(&in, n);
+		print_vect_mm("normalized: ", &in, n);
+	}
+
 	std::ofstream fp_position;
 	fp_position.open("ik_efpos.csv");
 	std::ofstream fp_q;
@@ -105,6 +122,9 @@ int main(void)
 	j[0].q = fdeg_to_12b(80.f);	//q1
 	j[1].q = fdeg_to_12b(-30.f);	//q2
 	j[2].q = fdeg_to_12b(-15.f);	//q3
+	int32_t qtarg[3];
+	for (int i = 0; i < 3; i++)
+		qtarg[i] = j[i].q;
 	load_qsin(j);
 	forward_kinematics_64(m, j);
 	
@@ -116,8 +136,9 @@ int main(void)
 
 
 	/*Re-initialize the joint positions to 0*/
-	for (int i = 0; i < 3; i++)
-		j[i].q = 0;
+	j[0].q = fdeg_to_12b(0.f);
+	j[1].q = fdeg_to_12b(-100.f);
+	j[2].q = fdeg_to_12b(-100.f);
 	load_qsin(j);
 
 	int solved = 0;
@@ -130,9 +151,9 @@ int main(void)
 		calc_J_32b_point(m, j, &o_anchor_b);
 
 		//show progress
-		//printf("anchor pos: [%d,%d,%d]\r\n", o_anchor_b.v[0], o_anchor_b.v[1], o_anchor_b.v[2]);
+		printf("targ: [%d,%d,%d], anchor pos: [%d,%d,%d]\r\n", otarg.v[0], otarg.v[1], otarg.v[2], o_anchor_b.v[0], o_anchor_b.v[1], o_anchor_b.v[2]);
 		//print_vect_mm("anchor", &o_anchor_b, j->n_t);
-		printf("q: [%f, %f, %f]\r\n", (float)j[0].q / PI_12B_BY_180, (float)j[1].q / PI_12B_BY_180, (float)j[2].q / PI_12B_BY_180);
+		//printf("q: [%f, %f, %f]\r\n", (float)j[0].q / PI_12B_BY_180, (float)j[1].q / PI_12B_BY_180, (float)j[2].q / PI_12B_BY_180);
 
 		//get vector pointing from the anchor point on the robot to the target. call it 'f'
 		vect3_32b_t f;
@@ -140,21 +161,64 @@ int main(void)
 			f.v[i] = (otarg.v[i] - o_anchor_b.v[i])/500;
 
 		//get the static torque produced by the force vector. Radix should be same as established in 'f' if j->si
-		calc_j_taulist(j, &f, tau, j->n_si);	//removing an n_si (from f) yields tau in radix 16
+		int tau_rshift = j->n_si;
+		calc_j_taulist(j, &f, tau, tau_rshift);	//removing an n_si (from f) yields tau in radix 16
+		int tau_radix = (j->n_si + j->n_t) - tau_rshift;
+
+		//printf("targ: [%d,%d,%d], cur: [%d,%d,%d]\r\n", qtarg[0], qtarg[1], qtarg[2], j[0].q, j[1].q, j[2].q);
 
 		//gradient descent step: increment q to move the anchor in the direction of the target
-		solved = 1;
+		//solved = 1;
+		//int32_t step[3] = { 0 };
+		//for (int i = 0; i < 3; i++)
+		//{
+
+		//	/*
+		//	IDEA: use cross product of sin-cos of the angle, scale with tau to 
+		//	add epsilon for (hopefully) improved ik gradient descent dynamics.
+		//	*/
+
+		//	step[i] = tau[i] / 2000;	
+		//	int32_t maxstep = PI_12B / 4;
+		//	if (step[i] > maxstep)
+		//		step[i] = maxstep;
+		//	if (step[i] < -maxstep)
+		//		step[i] = -maxstep;	//saturate step/epsilon
+		//	j[i].q += step[i];
+
+		//	if (step[i] != 0)
+		//		solved = 0;	//add solved logic. zero tau means we've stabilized and no changes will occur
+		//}
+		//load_qsin(j);
+
+		//iterate through joints. could be sll traversal
+		int32_t one = 1 << j->n_r;
+		vect3_32b_t z = { 0, 0, one};
+
 		for (int i = 0; i < 3; i++)
 		{
-			int32_t step = tau[i] / 4000;
-			j[i].q += step;
+			vect3_32b_t vq = { j[i].cos_q, j[i].sin_q, 0 };
+		
+			vect3_32b_t tangent;
+			cross64_pbr(&z, &vq, &tangent, j->n_r);
+			vect3_32b_t vq_new;
 
-			if (step != 0)
-				solved = 0;	//add solved logic. zero tau means we've stabilized and no changes will occur
+			int64_t tau_i_64 = (int64_t)tau[i] / 1000;
+			for (int r = 0; r < 3; r++)
+			{
+				int64_t tmp = (((int64_t)tangent.v[r]) * tau_i_64) >> tau_radix;
+				vq_new.v[r] = (int32_t)tmp + vq.v[r];
+			}
+			
+			normalize_vect64(&vq_new, j->n_si);
+
+			j[i].cos_q = vq_new.v[0];
+			j[i].sin_q = vq_new.v[1];
 		}
-		load_qsin(j);
+
 	}
 	
+
 	float div = (float)(1 << KINEMATICS_TRANSLATION_ORDER);
 	float res[3];
 	for (int i = 0; i < 3; i++)
