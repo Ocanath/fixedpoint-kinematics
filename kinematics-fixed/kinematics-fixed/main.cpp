@@ -206,10 +206,11 @@ int main(void)
 			cross64_pbr(&z, &vq, &tangent, j->n_r);
 			vect3_32b_t vq_new;
 
-			int64_t tau_i_64 = (int64_t)tau[i] / 150;
+			int64_t tau_i_64 = (int64_t)tau[i];
 			for (int r = 0; r < 3; r++)
 			{
 				int64_t tmp = (((int64_t)tangent.v[r]) * tau_i_64) >> tau_radix;
+				tmp /= 150;
 				vq_new.v[r] = (int32_t)tmp + vq.v[r];
 
 				if (tmp != 0)
