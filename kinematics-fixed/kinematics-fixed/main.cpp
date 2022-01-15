@@ -108,47 +108,49 @@ int main(void)
 	setup_dynamic_hex(&dh_f);	//set up a dynamic hexapod robot structure
 	
 	int leg = 0;
-	joint32_t * j = dh_f.p_joint[leg];
+	//joint32_t * j = dh_f.p_joint[leg];
+	joint32_t * start = dh_f.p_joint[leg];
+	joint32_t* end = &start[2];
 	mat4_32b_t* m = &dh_f.hb_0[leg];
 	vect3_32b_t o_footip_3;
 	for (int i = 0; i < 3; i++)
-		o_footip_3.v[i] = (int32_t)(o_footip_3_f[i] * j->n_t);	//establish a fixed-point representation of the foot tip position in mm*translationradix, in coordinate frame 3
+		o_footip_3.v[i] = (int32_t)(o_footip_3_f[i] * start->n_t);	//establish a fixed-point representation of the foot tip position in mm*translationradix, in coordinate frame 3
 
 	/*
 	* Note: for convenience, the singly linked list elements are ALSO in an array.
 	* However, the indexing is now broken. j[2] is frame 3.
 	*/
-	j[0].q = fdeg_to_12b(80.f);	//q1
-	j[1].q = fdeg_to_12b(-30.f);	//q2
-	j[2].q = fdeg_to_12b(-15.f);	//q3
+	start[0].q = fdeg_to_12b(80.f);	//q1
+	start[1].q = fdeg_to_12b(-30.f);	//q2
+	start[2].q = fdeg_to_12b(-15.f);	//q3
 	int32_t qtarg[3];
 	for (int i = 0; i < 3; i++)
-		qtarg[i] = j[i].q;
-	load_qsin(j);
-	forward_kinematics_64(m, j);
+		qtarg[i] = start[i].q;
+	load_qsin(start);
+	forward_kinematics_64(m, start);
 	
 	//vect3_32b_t otarg = h32_origin_pbr(&otarg, j[2].hb_i);
 	vect3_32b_t otarg;
 	for (int i = 0; i < 3; i++)
-		otarg.v[i] = j[2].hb_i.m[i][3];	//otarg is a point in the base frame
+		otarg.v[i] = start[2].hb_i.m[i][3];	//otarg is a point in the base frame
 	vect3_32b_t o_anchor_b;	//represents the anchor point for the gradient descent force vector
 
 
 	/*Re-initialize the joint positions to 0*/
-	j[0].q = fdeg_to_12b(0.f);
-	j[1].q = fdeg_to_12b(-100.f);
-	j[2].q = fdeg_to_12b(-100.f);
-	load_qsin(j);
+	start[0].q = fdeg_to_12b(0.f);
+	start[1].q = fdeg_to_12b(-100.f);
+	start[2].q = fdeg_to_12b(-100.f);
+	load_qsin(start);
 
 	int solved = 0;
-	print_vect_mm("TARG", &otarg, j->n_t);
+	print_vect_mm("TARG", &otarg, start->n_t);
 	int cycles = 0;
 	while (solved == 0)
 	{
 		//do forward kinematics
-		forward_kinematics_64(m, j);
-		h32_origin_pbr(&o_anchor_b, &j[2].hb_i);
-		calc_J_32b_point(m, j, &o_anchor_b);
+		forward_kinematics_64(m, start);
+		h32_origin_pbr(&o_anchor_b, &end->hb_i);
+		calc_J_32b_point(m, start, &o_anchor_b);
 
 		//show progress
 		printf("targ: [%d,%d,%d], anchor pos: [%d,%d,%d]\r\n", otarg.v[0], otarg.v[1], otarg.v[2], o_anchor_b.v[0], o_anchor_b.v[1], o_anchor_b.v[2]);
@@ -161,14 +163,15 @@ int main(void)
 			f.v[i] = (otarg.v[i] - o_anchor_b.v[i])/500;
 
 		//get the static torque produced by the force vector. Radix should be same as established in 'f' if j->si
-		int tau_rshift = j->n_t;
-		calc_j_taulist(j, &f, tau_rshift);	//removing an n_si (from f) yields tau in radix 16
-		int tau_radix = (j->n_si + j->n_t) - tau_rshift;
+		int tau_rshift = start->n_t;
+		calc_j_taulist(start, &f, tau_rshift);	//removing an n_si (from f) yields tau in radix 16
+		int tau_radix = (start->n_si + start->n_t) - tau_rshift;
 
 		//iterate through joints. could be sll traversal
-		int32_t one = 1 << j->n_r;
+		int32_t one = 1 << start->n_r;
 		vect3_32b_t z = { 0, 0, one};
 		solved = 1;
+		joint32_t* j = start;
 		for (int i = 0; i < 3; i++)
 		{
 			vect3_32b_t vq = { j[i].cos_q, j[i].sin_q, 0 };
