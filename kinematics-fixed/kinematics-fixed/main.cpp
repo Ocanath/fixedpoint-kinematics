@@ -80,6 +80,77 @@ void print_vect_mm(const char* prefix, vect3_32b_t* v, int radix)
 	printf("%s:[%f,%f,%f]\r\n", prefix, res[0], res[1], res[2]);
 }
 
+
+int gradient_descent_ik(mat4_32b_t * hb_0, joint32_t* start, joint32_t* end, vect3_32b_t* o_targ_b, vect3_32b_t* o_anchor_b)
+{
+	int solved = 0;
+	print_vect_mm("TARG", o_targ_b, start->n_t);
+	int cycles = 0;
+	while (solved == 0)
+	{
+		//do forward kinematics
+		forward_kinematics_64(hb_0, start);
+		h32_origin_pbr(o_anchor_b, &end->hb_i);
+		calc_J_32b_point(hb_0, start, o_anchor_b);
+
+		//show progress
+		printf("targ: [%d,%d,%d], anchor pos: [%d,%d,%d]\r\n", o_targ_b->v[0], o_targ_b->v[1], o_targ_b->v[2], o_anchor_b->v[0], o_anchor_b->v[1], o_anchor_b->v[2]);
+		//print_vect_mm("anchor", &o_anchor_b, j->n_t);
+		//printf("q: [%f, %f, %f]\r\n", (float)j[0].q / PI_12B_BY_180, (float)j[1].q / PI_12B_BY_180, (float)j[2].q / PI_12B_BY_180);
+
+		//get vector pointing from the anchor point on the robot to the target. call it 'f'
+		vect3_32b_t f;
+		for (int i = 0; i < 3; i++)
+			f.v[i] = (o_targ_b->v[i] - o_anchor_b->v[i]) / 500;
+
+		//get the static torque produced by the force vector. Radix should be same as established in 'f' if j->si
+		int tau_rshift = start->n_t;
+		calc_j_taulist(start, &f, tau_rshift);	//removing an n_si (from f) yields tau in radix 16
+		int tau_radix = (start->n_si + start->n_t) - tau_rshift;
+
+		//iterate through joints. could be sll traversal
+		int32_t one = 1 << start->n_r;
+		vect3_32b_t z = { 0, 0, one };
+		solved = 1;
+		joint32_t* j = start;
+		while (j != NULL)
+		{
+			vect3_32b_t vq = { j->cos_q, j->sin_q, 0 };
+
+			vect3_32b_t tangent;
+			cross64_pbr(&z, &vq, &tangent, j->n_r);
+			vect3_32b_t vq_new;
+
+			int64_t tau_i_64 = (int64_t)j->tau_static;
+			for (int r = 0; r < 3; r++)
+			{
+				int64_t tmp = (((int64_t)tangent.v[r]) * tau_i_64) >> tau_radix;
+				tmp /= 150;
+				vq_new.v[r] = (int32_t)tmp + vq.v[r];
+
+				if (tmp != 0)
+					solved = 0;
+			}
+
+			normalize_vect64(&vq_new, j->n_si);
+
+			j->cos_q = vq_new.v[0];
+			j->sin_q = vq_new.v[1];
+
+			j = j->child;
+		}
+		cycles++;
+	}
+	int rshift = (start->n_r - 12);
+	joint32_t* j = start;
+	while (j != NULL)
+	{
+		j->q = atan2_fixed(j->sin_q >> rshift, j->cos_q >> rshift);
+		j = j->child;
+	}
+	return cycles;
+}
+
 int main(void)
 {
 	{
@@ -142,71 +213,7 @@ int main(void)
 	start[2].q = fdeg_to_12b(-100.f);
 	load_qsin(start);
 
-	int solved = 0;
-	print_vect_mm("TARG", &otarg, start->n_t);
-	int cycles = 0;
-	while (solved == 0)
-	{
-		//do forward kinematics
-		forward_kinematics_64(m, start);
-		h32_origin_pbr(&o_anchor_b, &end->hb_i);
-		calc_J_32b_point(m, start, &o_anchor_b);
-
-		//show progress
-		printf("targ: [%d,%d,%d], anchor pos: [%d,%d,%d]\r\n", otarg.v[0], otarg.v[1], otarg.v[2], o_anchor_b.v[0], o_anchor_b.v[1], o_anchor_b.v[2]);
-		//print_vect_mm("anchor", &o_anchor_b, j->n_t);
-		//printf("q: [%f, %f, %f]\r\n", (float)j[0].q / PI_12B_BY_180, (float)j[1].q / PI_12B_BY_180, (float)j[2].q / PI_12B_BY_180);
-
-		//get vector pointing from the anchor point on the robot to the target. call it 'f'
-		vect3_32b_t f;
-		for (int i = 0; i < 3; i++)
-			f.v[i] = (otarg.v[i] - o_anchor_b.v[i])/500;
-
-		//get the static torque produced by the force vector. Radix should be same as established in 'f' if j->si
-		int tau_rshift = start->n_t;
-		calc_j_taulist(start, &f, tau_rshift);	//removing an n_si (from f) yields tau in radix 16
-		int tau_radix = (start->n_si + start->n_t) - tau_rshift;
-
-		//iterate through joints. could be sll traversal
-		int32_t one = 1 << start->n_r;
-		vect3_32b_t z = { 0, 0, one};
-		solved = 1;
-		joint32_t* j = start;
-		while(j != NULL)
-		{
-			vect3_32b_t vq = { j->cos_q, j->sin_q, 0 };
-		
-			vect3_32b_t tangent;
-			cross64_pbr(&z, &vq, &tangent, j->n_r);
-			vect3_32b_t vq_new;
-
-			int64_t tau_i_64 = (int64_t)j->tau_static;
-			for (int r = 0; r < 3; r++)
-			{
-				int64_t tmp = (((int64_t)tangent.v[r]) * tau_i_64) >> tau_radix;
-				tmp /= 150;
-				vq_new.v[r] = (int32_t)tmp + vq.v[r];
-
-				if (tmp != 0)
-					solved = 0;
-			}
-			
-			normalize_vect64(&vq_new, j->n_si);
-
-			j->cos_q = vq_new.v[0];
-			j->sin_q = vq_new.v[1];
-
-			j = j->child;
-		}
-		cycles++;
-	}
-	int rshift = (start->n_r - 12);
-	joint32_t* j = start;
-	while(j != NULL)
-	{
-		j->q = atan2_fixed(j->sin_q>>rshift, j->cos_q>>rshift);
-		j = j->child;
-	}
+	int cycles = gradient_descent_ik(m, start, end, &otarg, &o_anchor_b);
 
 	float div = (float)(1 << KINEMATICS_TRANSLATION_ORDER);
 	float res[3];
