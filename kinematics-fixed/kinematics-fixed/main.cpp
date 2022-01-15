@@ -106,8 +106,7 @@ int main(void)
 
 	dynamic_hex_t dh_f;
 	setup_dynamic_hex(&dh_f);	//set up a dynamic hexapod robot structure
-	int32_t tau[3] = { 0 };
-
+	
 	int leg = 0;
 	joint32_t * j = dh_f.p_joint[leg];
 	mat4_32b_t* m = &dh_f.hb_0[leg];
@@ -162,41 +161,13 @@ int main(void)
 			f.v[i] = (otarg.v[i] - o_anchor_b.v[i])/500;
 
 		//get the static torque produced by the force vector. Radix should be same as established in 'f' if j->si
-		int tau_rshift = j->n_si;
-		calc_j_taulist(j, &f, tau, tau_rshift);	//removing an n_si (from f) yields tau in radix 16
+		int tau_rshift = j->n_t;
+		calc_j_taulist(j, &f, tau_rshift);	//removing an n_si (from f) yields tau in radix 16
 		int tau_radix = (j->n_si + j->n_t) - tau_rshift;
-
-		//printf("targ: [%d,%d,%d], cur: [%d,%d,%d]\r\n", qtarg[0], qtarg[1], qtarg[2], j[0].q, j[1].q, j[2].q);
-
-		//gradient descent step: increment q to move the anchor in the direction of the target
-		//solved = 1;
-		//int32_t step[3] = { 0 };
-		//for (int i = 0; i < 3; i++)
-		//{
-
-		//	/*
-		//	IDEA: use cross product of sin-cos of the angle, scale with tau to 
-		//	add epsilon for (hopefully) improved ik gradient descent dynamics.
-		//	*/
-
-		//	step[i] = tau[i] / 2000;	
-		//	int32_t maxstep = PI_12B / 4;
-		//	if (step[i] > maxstep)
-		//		step[i] = maxstep;
-		//	if (step[i] < -maxstep)
-		//		step[i] = -maxstep;	//saturate step/epsilon
-		//	j[i].q += step[i];
-
-		//	if (step[i] != 0)
-		//		solved = 0;	//add solved logic. zero tau means we've stabilized and no changes will occur
-		//}
-		//load_qsin(j);
 
 		//iterate through joints. could be sll traversal
 		int32_t one = 1 << j->n_r;
 		vect3_32b_t z = { 0, 0, one};
-
-
 		solved = 1;
 		for (int i = 0; i < 3; i++)
 		{
@@ -206,7 +177,7 @@ int main(void)
 			cross64_pbr(&z, &vq, &tangent, j->n_r);
 			vect3_32b_t vq_new;
 
-			int64_t tau_i_64 = (int64_t)tau[i];
+			int64_t tau_i_64 = (int64_t)j[i].tau_static;
 			for (int r = 0; r < 3; r++)
 			{
 				int64_t tmp = (((int64_t)tangent.v[r]) * tau_i_64) >> tau_radix;

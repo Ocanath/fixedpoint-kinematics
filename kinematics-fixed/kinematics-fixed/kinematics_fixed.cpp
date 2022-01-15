@@ -198,13 +198,13 @@ void load_qsin(joint32_t* chain_start)
 	
 	Dangerous; could overrun if the linked list is not set up properly, or if 
 */
-void calc_j_taulist(joint32_t* chain_start, vect3_32b_t* f, int32_t * taulist, int rshift)
+void calc_j_taulist(joint32_t* chain_start, vect3_32b_t* f, int rshift)
 {
 	int i = 0;
 	joint32_t* j = chain_start;
 	while (j != NULL)
 	{
-		taulist[i] = dot64_pbr(&(j->Si.v[3]), f->v, 3, rshift);	//remove Si radix to restore original 'f' radix
+		j->tau_static = dot64_pbr(&(j->Si.v[3]), f->v, 3, rshift);	//remove Si radix to restore original 'f' radix
 
 		j = j->child;
 		i++;
