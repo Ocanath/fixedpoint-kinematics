@@ -71,62 +71,64 @@ int32_t fdeg_to_12b(float f)
 
 static const float o_footip_3_f[3] = { -15.31409f, -9.55025f, 0.f };
 
-void print_vect_mm(const char* prefix, vect3_32b_t* v, int radix)
+void print_vect_mm(const char* prefix, vect3_32b_t* v, int radix, const char * suffix)
 {
 	float div = (float)(1 << radix);
 	float res[3];
 	for (int i = 0; i < 3; i++)
 		res[i] = (float)v->v[i] / div;
-	printf("%s:[%f,%f,%f]\r\n", prefix, res[0], res[1], res[2]);
+	printf("%s:[%f,%f,%f]%s", prefix, res[0], res[1], res[2], suffix);
 }
 
 
 int gradient_descent_ik(mat4_32b_t * hb_0, joint32_t* start, joint32_t* end, vect3_32b_t* o_anchor_end, vect3_32b_t* o_targ_b, vect3_32b_t* o_anchor_b)
 {
+	if (hb_0 == NULL || start == NULL || end == NULL || o_anchor_end == NULL || o_targ_b == NULL || o_anchor_b == NULL)
+		return 0;	//blah
+
+	joint32_t* j;
 	int solved = 0;
-	print_vect_mm("TARG", o_targ_b, start->n_t);
 	int cycles = 0;
 	while (solved == 0)
 	{
 		//do forward kinematics
 		forward_kinematics_64(hb_0, start);
 		h32_v32_mult(&end->hb_i, o_anchor_end, o_anchor_b, start->n_r);	//shift rotation out because only rotational components are added for a ht-multiply
-		h32_origin_pbr(o_anchor_b, &end->hb_i);
 		calc_J_32b_point(hb_0, start, o_anchor_b);
 
-		//show progress
-		//printf("targ: [%d,%d,%d], anchor pos: [%d,%d,%d]\r\n", o_targ_b->v[0], o_targ_b->v[1], o_targ_b->v[2], o_anchor_b->v[0], o_anchor_b->v[1], o_anchor_b->v[2]);
-		//print_vect_mm("anchor", &o_anchor_b, j->n_t);
-		//printf("q: [%f, %f, %f]\r\n", (float)j[0].q / PI_12B_BY_180, (float)j[1].q / PI_12B_BY_180, (float)j[2].q / PI_12B_BY_180);
+		//printf("targ: [%d,%d,%d], ref: [%d,%d,%d]\r\n", o_targ_b->v[0], o_targ_b->v[1], o_targ_b->v[2], o_anchor_b->v[0], o_anchor_b->v[1], o_anchor_b->v[2]);
+		print_vect_mm("targ: ", o_targ_b, 16, "");
+		print_vect_mm("ref: ", o_anchor_b, 16, "\r\n");
 
-		//get vector pointing from the anchor point on the robot to the target. call it 'f'
+		//get vector pointing from the anchor point on the robot to the target. call it 'f'. Unscaled.
 		vect3_32b_t f;
-		for (int i = 0; i < 3; i++)
-			f.v[i] = (o_targ_b->v[i] - o_anchor_b->v[i]) / 500;
-
+		for (int i = 0; i < 3; i++) //this can have much lower resolution than tau.  high res tau is important
+			f.v[i] = (o_targ_b->v[i] - o_anchor_b->v[i])>>4;	//step down from 16 to 12 bit reso for force vector
 		//get the static torque produced by the force vector. Radix should be same as established in 'f' if j->si
-		int tau_rshift = start->n_t;
+		int tau_rshift = start->n_si; //if you remove si, you get tau in resolution of f
 		calc_j_taulist(start, &f, tau_rshift);	//removing an n_si (from f) yields tau in radix 16
 		int tau_radix = (start->n_si + start->n_t) - tau_rshift;
 
-		//iterate through joints. could be sll traversal
+		//apply a scaled torque vector to the chain structure via. sin and cosine vectors
 		int32_t one = 1 << start->n_r;
 		vect3_32b_t z = { 0, 0, one };
 		solved = 1;
-		joint32_t* j = start;
+		j = start;
 		while (j != NULL)
 		{
-			vect3_32b_t vq = { j->cos_q, j->sin_q, 0 };
-
+			vect3_32b_t vq = { j->cos_q, j->sin_q, 0 };	//create sin-cos structure
+			
 			vect3_32b_t tangent;
-			cross64_pbr(&z, &vq, &tangent, j->n_r);
-			vect3_32b_t vq_new;
-
-			int64_t tau_i_64 = (int64_t)j->tau_static;
-			for (int r = 0; r < 3; r++)
+			cross64_pbr(&z, &vq, &tangent, j->n_r);		//obtain the tangent vector in the xy plane. it is normalized
+			
+			vect3_32b_t vq_new;	//will contain the result of ~q+epsilon for our gradient descent
+			
+			//Scale the tangent vector and add it to the original vq vector
+			int64_t tau_i_64 = (int64_t)(j->tau_static);	//64 bit buffer for shifting
+			for (int r = 0; r < 3; r++)	
 			{
 				int64_t tmp = (((int64_t)tangent.v[r]) * tau_i_64) >> tau_radix;
-				tmp /= 150;
+				tmp /= 5000;	//post-multiply reduce
 				vq_new.v[r] = (int32_t)tmp + vq.v[r];
 
 				if (tmp != 0)
@@ -142,8 +144,9 @@ int gradient_descent_ik(mat4_32b_t * hb_0, joint32_t* start, joint32_t* end, vec
 		}
 		cycles++;
 	}
+
 	int rshift = (start->n_r - 12);
-	joint32_t* j = start;
+	j = start;
 	while (j != NULL)
 	{
 		j->q = atan2_fixed(j->sin_q >> rshift, j->cos_q >> rshift);
@@ -186,7 +189,7 @@ int main(void)
 	mat4_32b_t* m = &dh_f.hb_0[leg];
 	vect3_32b_t o_footip_3;
 	for (int i = 0; i < 3; i++)
-		o_footip_3.v[i] = (int32_t)(o_footip_3_f[i] * start->n_t);	//establish a fixed-point representation of the foot tip position in mm*translationradix, in coordinate frame 3
+		o_footip_3.v[i] = (int32_t)(o_footip_3_f[i] * (float)(1<<start->n_t) );	//establish a fixed-point representation of the foot tip position in mm*translationradix, in coordinate frame 3
 
 	/*
 	* Note: for convenience, the singly linked list elements are ALSO in an array.
@@ -203,18 +206,16 @@ int main(void)
 	
 	//vect3_32b_t otarg = h32_origin_pbr(&otarg, j[2].hb_i);
 	vect3_32b_t otarg;
-	for (int i = 0; i < 3; i++)
-		otarg.v[i] = start[2].hb_i.m[i][3];	//otarg is a point in the base frame
-	vect3_32b_t o_anchor_b;	//represents the anchor point for the gradient descent force vector
-
-
+	h32_v32_mult(&start[2].hb_i, &o_footip_3, &otarg, start->n_r);
+	
 	/*Re-initialize the joint positions to 0*/
 	start[0].q = fdeg_to_12b(0.f);
 	start[1].q = fdeg_to_12b(-100.f);
 	start[2].q = fdeg_to_12b(-100.f);
 	load_qsin(start);
-	vect3_32b_t zero = { {0,0,0} };
-	int cycles = gradient_descent_ik(m, start, end, &zero, &otarg, &o_anchor_b);
+
+	vect3_32b_t o_anchor_b;	//represents the anchor point for the gradient descent force vector
+	int cycles = gradient_descent_ik(m, start, end, &o_footip_3, &otarg, &o_anchor_b);
 
 	float div = (float)(1 << KINEMATICS_TRANSLATION_ORDER);
 	float res[3];
