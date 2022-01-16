@@ -84,6 +84,7 @@ void ht32_mult64_pbr(mat4_32b_t* m1, mat4_32b_t* m2, mat4_32b_t* ret, int n)
 /**/
 void  h32_v32_mult(mat4_32b_t* m, vect3_32b_t* vin, vect3_32b_t* vout, int rshift)
 {
+	int64_t one = ((int64_t)1) << rshift;
 	for (int r = 0; r < 3; r++)
 	{
 		int64_t tmp = 0;
@@ -91,7 +92,7 @@ void  h32_v32_mult(mat4_32b_t* m, vect3_32b_t* vin, vect3_32b_t* vout, int rshif
 		{
 			tmp += ( ((int64_t)m->m[r][c]) * ((int64_t)vin->v[c]) );
 		}
-		tmp += m->m[r][3];
+		tmp += (int64_t)m->m[r][3]*one;	
 		vout->v[r] = (int32_t)(tmp >> rshift);
 	}
 }

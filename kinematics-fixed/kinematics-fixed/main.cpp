@@ -81,7 +81,7 @@ void print_vect_mm(const char* prefix, vect3_32b_t* v, int radix)
 }
 
 
-int gradient_descent_ik(mat4_32b_t * hb_0, joint32_t* start, joint32_t* end, vect3_32b_t* o_targ_b, vect3_32b_t* o_anchor_b)
+int gradient_descent_ik(mat4_32b_t * hb_0, joint32_t* start, joint32_t* end, vect3_32b_t* o_anchor_end, vect3_32b_t* o_targ_b, vect3_32b_t* o_anchor_b)
 {
 	int solved = 0;
 	print_vect_mm("TARG", o_targ_b, start->n_t);
@@ -90,11 +90,12 @@ int gradient_descent_ik(mat4_32b_t * hb_0, joint32_t* start, joint32_t* end, vec
 	{
 		//do forward kinematics
 		forward_kinematics_64(hb_0, start);
+		h32_v32_mult(&end->hb_i, o_anchor_end, o_anchor_b, start->n_r);	//shift rotation out because only rotational components are added for a ht-multiply
 		h32_origin_pbr(o_anchor_b, &end->hb_i);
 		calc_J_32b_point(hb_0, start, o_anchor_b);
 
 		//show progress
-		printf("targ: [%d,%d,%d], anchor pos: [%d,%d,%d]\r\n", o_targ_b->v[0], o_targ_b->v[1], o_targ_b->v[2], o_anchor_b->v[0], o_anchor_b->v[1], o_anchor_b->v[2]);
+		//printf("targ: [%d,%d,%d], anchor pos: [%d,%d,%d]\r\n", o_targ_b->v[0], o_targ_b->v[1], o_targ_b->v[2], o_anchor_b->v[0], o_anchor_b->v[1], o_anchor_b->v[2]);
 		//print_vect_mm("anchor", &o_anchor_b, j->n_t);
 		//printf("q: [%f, %f, %f]\r\n", (float)j[0].q / PI_12B_BY_180, (float)j[1].q / PI_12B_BY_180, (float)j[2].q / PI_12B_BY_180);
 
@@ -153,22 +154,22 @@ int gradient_descent_ik(mat4_32b_t * hb_0, joint32_t* start, joint32_t* end, vec
 
 int main(void)
 {
-	{
-		int64_t v = 84 * (1 << KINEMATICS_TRANSLATION_ORDER);
-		int64_t vnew = sqrt_i64(v);
-		printf("in: %d, out: %d\r\n", (int32_t)v, (int32_t)vnew);
-	}
-	{
-		float f[3] = { 4.7, 9.21, -11.15 };
-		vect3_32b_t in;
-		int n = KINEMATICS_SIN_ORDER;
-		float scf = (float)(1 << n);
-		for (int i = 0; i < 3; i++)
-			in.v[i] = (int32_t)(f[i] * scf);
-		print_vect_mm("input: ", &in, n);
-		normalize_vect64(&in, n);
-		print_vect_mm("normalized: ", &in, n);
-	}
+	//{
+	//	int64_t v = 84 * (1 << KINEMATICS_TRANSLATION_ORDER);
+	//	int64_t vnew = sqrt_i64(v);
+	//	printf("in: %d, out: %d\r\n", (int32_t)v, (int32_t)vnew);
+	//}
+	//{
+	//	float f[3] = { 4.7, 9.21, -11.15 };
+	//	vect3_32b_t in;
+	//	int n = KINEMATICS_SIN_ORDER;
+	//	float scf = (float)(1 << n);
+	//	for (int i = 0; i < 3; i++)
+	//		in.v[i] = (int32_t)(f[i] * scf);
+	//	print_vect_mm("input: ", &in, n);
+	//	normalize_vect64(&in, n);
+	//	print_vect_mm("normalized: ", &in, n);
+	//}
 
 	std::ofstream fp_position;
 	fp_position.open("ik_efpos.csv");
@@ -212,8 +213,8 @@ int main(void)
 	start[1].q = fdeg_to_12b(-100.f);
 	start[2].q = fdeg_to_12b(-100.f);
 	load_qsin(start);
-
-	int cycles = gradient_descent_ik(m, start, end, &otarg, &o_anchor_b);
+	vect3_32b_t zero = { {0,0,0} };
+	int cycles = gradient_descent_ik(m, start, end, &zero, &otarg, &o_anchor_b);
 
 	float div = (float)(1 << KINEMATICS_TRANSLATION_ORDER);
 	float res[3];
