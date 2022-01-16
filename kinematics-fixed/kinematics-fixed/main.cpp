@@ -81,7 +81,7 @@ void print_vect_mm(const char* prefix, vect3_32b_t* v, int radix, const char * s
 }
 
 
-int gradient_descent_ik(mat4_32b_t * hb_0, joint32_t* start, joint32_t* end, vect3_32b_t* o_anchor_end, vect3_32b_t* o_targ_b, vect3_32b_t* o_anchor_b)
+int gradient_descent_ik(mat4_32b_t * hb_0, joint32_t* start, joint32_t* end, vect3_32b_t* o_anchor_end, vect3_32b_t* o_targ_b, vect3_32b_t* o_anchor_b, int32_t epsilon_divisor)
 {
 	if (hb_0 == NULL || start == NULL || end == NULL || o_anchor_end == NULL || o_targ_b == NULL || o_anchor_b == NULL)
 		return 0;	//blah
@@ -128,7 +128,7 @@ int gradient_descent_ik(mat4_32b_t * hb_0, joint32_t* start, joint32_t* end, vec
 			for (int r = 0; r < 3; r++)	
 			{
 				int64_t tmp = (((int64_t)tangent.v[r]) * tau_i_64) >> tau_radix;
-				tmp /= 5000;	//post-multiply reduce
+				tmp /= epsilon_divisor;	//post-multiply reduce
 				vq_new.v[r] = (int32_t)tmp + vq.v[r];
 
 				if (tmp != 0)
@@ -215,7 +215,7 @@ int main(void)
 	load_qsin(start);
 
 	vect3_32b_t o_anchor_b;	//represents the anchor point for the gradient descent force vector
-	int cycles = gradient_descent_ik(m, start, end, &o_footip_3, &otarg, &o_anchor_b);
+	int cycles = gradient_descent_ik(m, start, end, &o_footip_3, &otarg, &o_anchor_b, 5000);
 
 	float div = (float)(1 << KINEMATICS_TRANSLATION_ORDER);
 	float res[3];
