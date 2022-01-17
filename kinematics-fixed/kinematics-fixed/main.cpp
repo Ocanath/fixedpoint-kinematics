@@ -103,9 +103,9 @@ int main(void)
 	* Note: for convenience, the singly linked list elements are ALSO in an array.
 	* However, the indexing is now broken. j[2] is frame 3.
 	*/
-	start[0].q = fdeg_to_12b(80.f);	//q1
-	start[1].q = fdeg_to_12b(-30.f);	//q2
-	start[2].q = fdeg_to_12b(-15.f);	//q3
+	start[0].q = fdeg_to_12b(15.f);	//q1
+	start[1].q = fdeg_to_12b(-15.f);	//q2
+	start[2].q = fdeg_to_12b(90.f);	//q3
 	int32_t qtarg[3];
 	for (int i = 0; i < 3; i++)
 		qtarg[i] = start[i].q;
@@ -113,26 +113,35 @@ int main(void)
 	forward_kinematics_64(m, start);
 	
 	//vect3_32b_t otarg = h32_origin_pbr(&otarg, j[2].hb_i);
-	vect3_32b_t otarg;
-	h32_v32_mult(&start[2].hb_i, &o_footip_3, &otarg, start->n_r);
+	vect3_32b_t ostart;
+	h32_v32_mult(&start[2].hb_i, &o_footip_3, &ostart, start->n_r);
 	
 	/*Re-initialize the joint positions to 0*/
 	start[0].q = fdeg_to_12b(0.f);
-	start[1].q = fdeg_to_12b(-100.f);
-	start[2].q = fdeg_to_12b(-100.f);
+	start[1].q = fdeg_to_12b(0.f);
+	start[2].q = fdeg_to_12b(0.f);
 	load_qsin(start);
 
-	print_vect_mm("targ:", &otarg, start->n_t, "\r\n");
-	vect3_32b_t o_anchor_b;	//represents the anchor point for the gradient descent force vector
-	int cycles = gradient_descent_ik(m, start, end, &o_footip_3, &otarg, &o_anchor_b, 5000);
+	float one_t = (float)(1 << start->n_t);
+	for (float x = -30.f; x < 30.f; x += 3.f)
+	{
+		for (float y = -30.f; y < 30.f; y += 3.f)
+		{
+			for (float z = -30.f; z < 30.f; z += 3.f)
+			{
+				vect3_32b_t otarg;
+				float arr[] = { x,y,z };
+				for (int i = 0; i < 3; i++)
+					otarg.v[i] = (int32_t)(arr[i] * one_t)+ostart.v[i];
 
-	float div = (float)(1 << KINEMATICS_TRANSLATION_ORDER);
-	float res[3];
-	for (int i = 0; i < 3; i++)
-		res[i] = (float)(otarg.v[i] - o_anchor_b.v[i])/div;
-	
-	printf("Final Error: [%f,%f,%f]\r\n", res[0], res[1], res[2]);
-	printf("Computed in %d cycles\r\n", cycles);
-	div = 71.4887f;
-	printf("Q: [%f,%f,%f]\r\n", (float)start[0].q / div, (float)start[1].q / div, (float)start[2].q / div);
+				print_vect_mm("targ:", &otarg, start->n_t, " ");
+				vect3_32b_t o_anchor_b;	//represents the anchor point for the gradient descent force vector
+				int cycles = gradient_descent_ik(m, start, end, &o_footip_3, &otarg, &o_anchor_b, 7000);
+				print_vect_mm("anchor:", &o_anchor_b, start->n_t, " ");
+				printf("cycles: %d, ", cycles);
+				float div = 71.4887f;
+				printf("Q: [%f,%f,%f]\r\n", (float)start[0].q / div, (float)start[1].q / div, (float)start[2].q / div);
+			}
+		}
+	}
 }

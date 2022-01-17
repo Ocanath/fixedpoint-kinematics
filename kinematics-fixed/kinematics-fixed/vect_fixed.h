@@ -42,4 +42,6 @@ void normalize_vect64(vect3_32b_t* vin, int vin_radix);
 int32_t sqrt_i32(int32_t v);
 int64_t sqrt_i64(int64_t v);
 
+void float_to_int32(float* in, int32_t* out, int num_elements, int radix);
+
 #endif // !VECT_FIXED_H

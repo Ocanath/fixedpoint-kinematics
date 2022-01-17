@@ -129,6 +129,14 @@ void cross64_pbr(vect3_32b_t* v_a, vect3_32b_t* v_b, vect3_32b_t* ret, int rshif
 	ret->v[2] = (int32_t)((-va1 * vb0 + va0 * vb1) >> rshift);
 }
 
+/*Helper function to convert array of floats to array of int32 with proper radix representation*/
+void float_to_int32(float* in, int32_t* out, int num_elements, int radix)
+{
+	float c = (float)(1 << radix);	//constant to multiply up input in order to get proper radix
+	for (int i = 0; i < num_elements; i++)
+		out[i] = (int32_t)(in[i] * c);
+}
+
 int32_t vect64_mag(vect3_32b_t* v)
 {
 	return 0;
@@ -137,6 +145,7 @@ int32_t vect64_mag(vect3_32b_t* v)
 
 // sqrt_i32 computes the squrare root of a 32bit integer and returns
 // a 32bit integer value. It requires that v is positive.
+//longer compute time for bigger inputs v
 int32_t sqrt_i32(int32_t v) 
 {
 	uint32_t b = 1 << 30, q = 0, r = v;
