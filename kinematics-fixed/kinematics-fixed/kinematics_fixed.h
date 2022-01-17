@@ -42,5 +42,6 @@ void calc_J_32b_point(mat4_32b_t* hb_0, joint32_t* chain_start, vect3_32b_t* poi
 void load_qsin(joint32_t* chain_start);
 void calc_j_taulist(joint32_t* chain_start, vect3_32b_t* f, int rshift);
 joint32_t* last_joint(joint32_t* chain_start);
+int gradient_descent_ik(mat4_32b_t* hb_0, joint32_t* start, joint32_t* end, vect3_32b_t* o_anchor_end, vect3_32b_t* o_targ_b, vect3_32b_t* o_anchor_b, int32_t epsilon_divisor);
 
 #endif // !KINEMATICS_FIXED_H
