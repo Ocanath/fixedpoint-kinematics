@@ -40,7 +40,7 @@ extern const mat4_32b gl_identity_matrix_32b;
 void forward_kinematics_64(mat4_32b_t* hb_0, joint32_t* f1_joint);
 void calc_J_32b_point(mat4_32b_t* hb_0, joint32_t* chain_start, vect3_32b_t* point_b);
 void load_qsin(joint32_t* chain_start);
-void calc_j_taulist(joint32_t* chain_start, vect3_32b_t* f, int rshift);
+void calc_32b_taulist(joint32_t* chain_start, vect3_32b_t* f, int rshift);
 joint32_t* last_joint(joint32_t* chain_start);
 int gradient_descent_ik(mat4_32b_t* hb_0, joint32_t* start, joint32_t* end, vect3_32b_t* o_anchor_end, vect3_32b_t* o_targ_b, vect3_32b_t* o_anchor_b, int32_t epsilon_divisor);
 

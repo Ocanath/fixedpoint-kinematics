@@ -226,7 +226,7 @@ void normalize_vect64(vect3_32b_t* vin, int vin_radix)
 	//scale the input vector
 	int64_t one = ((int64_t)1 << vin_radix);	//t y p e s
 	for(int i = 0; i < 3; i++)
-		vin->v[i] = (int32_t)((varr[i] * one) / mag);	//apply 1/sq. Multiply by radix to preserve sign, and premultiply to prevent truncation of lower bits.
+		vin->v[i] = (int32_t)((varr[i] * one) / mag);	//apply 1/sq. Multiply by radix to preserve sign, and premultiply by one to prevent truncation of lower bits. mag is same radix as vin
 }
 
 /*Generic 64bit buffer dot product calculator for vectors of arbitrary size*/

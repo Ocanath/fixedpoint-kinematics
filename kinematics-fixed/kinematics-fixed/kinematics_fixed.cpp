@@ -196,18 +196,16 @@ void load_qsin(joint32_t* chain_start)
 /*
 	Traverse linked list and load torques into a list of equal size. 
 	
-	Dangerous; could overrun if the linked list is not set up properly, or if 
+	Dangerous; could overrun if the linked list is not set up properly
 */
-void calc_j_taulist(joint32_t* chain_start, vect3_32b_t* f, int rshift)
+void calc_32b_taulist(joint32_t* chain_start, vect3_32b_t* f, int rshift)
 {
-	int i = 0;
 	joint32_t* j = chain_start;
 	while (j != NULL)
 	{
 		j->tau_static = dot64_pbr(&(j->Si.v[3]), f->v, 3, rshift);	//remove Si radix to restore original 'f' radix
 
 		j = j->child;
-		i++;
 	}
 }
 
@@ -249,7 +247,7 @@ int gradient_descent_ik(mat4_32b_t* hb_0, joint32_t* start, joint32_t* end, vect
 			f.v[i] = (o_targ_b->v[i] - o_anchor_b->v[i]) >> 4;	//step down from 16 to 12 bit reso for force vector
 		//get the static torque produced by the force vector. Radix should be same as established in 'f' if j->si
 		int tau_rshift = start->n_si; //if you remove si, you get tau in resolution of f
-		calc_j_taulist(start, &f, tau_rshift);	//removing an n_si (from f) yields tau in radix 16
+		calc_32b_taulist(start, &f, tau_rshift);	//removing an n_si (from f) yields tau in radix 16
 		int tau_radix = (start->n_si + start->n_t) - tau_rshift;
 
 		//apply a scaled torque vector to the chain structure via. sin and cosine vectors
